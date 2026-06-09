@@ -9,7 +9,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class PasswordUpdateDTO {
-    private String oldPassword;
-    private String newPassword;
+public class ManagerReviewDTO {
+    private String managerStrengths;
+    private String managerImprove;
+    private String managerComments;
+    private Integer managerRating;
 }

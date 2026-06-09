@@ -5,18 +5,16 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class UserRequestDTO {
-    private String firstName;
-    private String lastName;
-    private String email;
+public class AppraisalsRequestDTO {
+    private String cycleName;
+    private LocalDate cycleStartDate;
+    private LocalDate cycleEndDate;
+    private Long employeeId;
     private Long managerId;
-    private Long deptId;
-    private String role;
-    private String phone;
-    private String designation;
-
 }

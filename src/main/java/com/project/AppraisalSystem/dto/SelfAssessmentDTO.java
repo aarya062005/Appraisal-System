@@ -9,7 +9,10 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class PasswordUpdateDTO {
-    private String oldPassword;
-    private String newPassword;
+public class SelfAssessmentDTO {
+    private String whatWentWell;
+    private String whatToImprove;
+    private String achievements;
+    private Integer selfRating;
 }
+

@@ -3,7 +3,7 @@ package com.project.AppraisalSystem.service.implementation;
 import com.project.AppraisalSystem.dto.DepartmentRequestDTO;
 import com.project.AppraisalSystem.dto.DepartmentResponseDTO;
 import com.project.AppraisalSystem.entity.Department;
-import com.project.AppraisalSystem.repository.Departmentrepository;
+import com.project.AppraisalSystem.repository.DepartmentRepository;
 import com.project.AppraisalSystem.service.DepartmentService;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
@@ -14,11 +14,11 @@ import java.util.stream.Collectors;
 @Service
 public class DepartmentServiceImpl implements DepartmentService {
 
-    private final Departmentrepository departmentRepository;
+    private final DepartmentRepository departmentRepository;
     private final ModelMapper modelMapper;
 
 
-    public DepartmentServiceImpl(Departmentrepository departmentRepository,
+    public DepartmentServiceImpl(DepartmentRepository departmentRepository,
                                  ModelMapper modelMapper) {
         this.departmentRepository = departmentRepository;
         this.modelMapper = modelMapper;

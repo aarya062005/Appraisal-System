@@ -1,25 +1,22 @@
 package com.project.AppraisalSystem.controller;
 
-
-
 import com.project.AppraisalSystem.dto.DepartmentRequestDTO;
 import com.project.AppraisalSystem.dto.DepartmentResponseDTO;
 import com.project.AppraisalSystem.service.DepartmentService;
 import jakarta.validation.Valid;
+import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/departments")
+@RequestMapping("/api/departments")
+@AllArgsConstructor
 public class DepartmentController {
 
     private final DepartmentService departmentService;
 
-    public DepartmentController(DepartmentService departmentService) {
-        this.departmentService = departmentService;
-    }
 
     @GetMapping
     public ResponseEntity<List<DepartmentResponseDTO>> findAll() {

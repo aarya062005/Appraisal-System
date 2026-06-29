@@ -30,4 +30,5 @@ UserResponseDTO updateDesignation(Long Id, String designation);
 String deleteById(Long id);
 String deleteByEmail(String email);
 
+    UserResponseDTO updateDepartment(Long id, Long deptId);
 }

@@ -42,4 +42,6 @@ public interface AppraisalsService {
     EmployeeAppraisalResponseDTO acknowledgeAppraisal(Long appraisalId);
     // -------------------------------------------DELETE-------------------------------------------
     String deleteAppraisal(Long appraisalId);
-}
+
+    EmployeeAppraisalResponseDTO    findAppraisalByIdForEmployee(Long appraisalId);
+};

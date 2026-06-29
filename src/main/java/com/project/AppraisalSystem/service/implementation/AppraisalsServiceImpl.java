@@ -10,7 +10,7 @@ import com.project.AppraisalSystem.exception.BadRequestException;
 import com.project.AppraisalSystem.exception.DuplicateResourceException;
 import com.project.AppraisalSystem.exception.ResourceNotFoundException;
 import com.project.AppraisalSystem.repository.AppraisalsRepository;
-import com.project.AppraisalSystem.repository.DepartmentRepository;
+
 import com.project.AppraisalSystem.repository.UserRepository;
 import com.project.AppraisalSystem.service.AppraisalsService;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,14 +33,10 @@ public class AppraisalsServiceImpl implements AppraisalsService {
     private AppraisalsSummaryDTO toSummaryDTO(Appraisals appraisal) {
         AppraisalsSummaryDTO dto = modelMapper.map(appraisal, AppraisalsSummaryDTO.class);
         if (appraisal.getEmployee() != null) {
-            dto.setEmployeeEmail(appraisal.getEmployee().getEmail());
-            dto.setEmployeeEmail(appraisal.getEmployee().getFirstName()
-                    + " " + appraisal.getEmployee().getLastName());
+            dto.setEmployeeEmail(appraisal.getEmployee().getEmail()); // ✅ only email
         }
         if (appraisal.getManager() != null) {
-            dto.setManagerEmail(appraisal.getManager().getEmail());
-            dto.setManagerEmail(appraisal.getManager().getFirstName()
-                    + " " + appraisal.getManager().getLastName());
+            dto.setManagerEmail(appraisal.getManager().getEmail()); // ✅ only email
         }
         return dto;
     }
@@ -59,6 +55,8 @@ public class AppraisalsServiceImpl implements AppraisalsService {
         if (appraisal.getEmployee() != null) {
             dto.setEmployeeEmail(appraisal.getEmployee().getEmail());
         }
+        dto.setSelfRating(appraisal.getSelfRating());        // ← added
+        dto.setManagerRating(appraisal.getManagerRating());  // ← added
         return dto;
     }
     // ------------------------------------EMPLOYEE RESPONSE--------------------------------------------
@@ -185,7 +183,14 @@ public class AppraisalsServiceImpl implements AppraisalsService {
                 .map(this::toSummaryDTO)
                 .collect(Collectors.toList());
     }
-
+    @Override
+    @Transactional(readOnly = true)
+    public EmployeeAppraisalResponseDTO findAppraisalByIdForEmployee(Long appraisalId) {
+        Appraisals appraisal = appraisalsRepository.findById(appraisalId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Appraisal not found with id: " + appraisalId));
+        return toEmployeeResponseDTO(appraisal);
+    }
     //------------------------------POST APPRAISAL --------------------------------
     @Override
     public AppraisalsSummaryDTO createAppraisal(AppraisalsRequestDTO dto) {

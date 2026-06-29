@@ -10,7 +10,17 @@ import lombok.Setter;
 @AllArgsConstructor
 @NoArgsConstructor
 public class DepartmentResponseDTO {
+
+
     private Long deptId;
+
+
     private String deptName;
+
+
     private String deptDescription;
+
+
+    private Integer employeeCount;
+
 }

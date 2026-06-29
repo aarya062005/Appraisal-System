@@ -11,6 +11,7 @@ import com.project.AppraisalSystem.exception.ResourceNotFoundException;
 import com.project.AppraisalSystem.repository.DepartmentRepository;
 import com.project.AppraisalSystem.repository.UserRepository;
 import com.project.AppraisalSystem.service.UserService;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.AllArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
@@ -41,6 +42,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<UserResponseDTO> findAllUsers() {
         return userRepository.findAll()
                 .stream()
@@ -50,6 +52,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public UserResponseDTO findUserById(Long userId) {
         return userRepository.findById(userId)
                 .map(this::toResponseDTO)
@@ -58,6 +61,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public UserResponseDTO findUserByEmail(String email) {
         return userRepository.findByEmail(email.trim())
                 .map(this::toResponseDTO)
@@ -66,6 +70,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<UserResponseDTO> findAllUsersByDepartment(Long deptId) {
         departmentRepository.findById(deptId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -77,6 +82,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<UserResponseDTO> findAllUsersByManager(Long managerId) {
         User manager = userRepository.findById(managerId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -92,6 +98,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public UserResponseDTO createUser(UserRequestDTO dto) {
         userRepository.findByEmail(dto.getEmail())
                 .ifPresent(existing -> {
@@ -116,10 +123,14 @@ public class UserServiceImpl implements UserService {
             user.setManager(manager);
         }
         user.setIsActive(true);
+        // Use provided password or fallback to default
+        user.setPassword(dto.getPassword() != null && !dto.getPassword().isBlank()
+                ? dto.getPassword() : "Welcome@123");
         return toResponseDTO(userRepository.save(user));
     }
 
     @Override
+    @Transactional
     public UserResponseDTO updateFirstName(Long id, String firstName) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -129,6 +140,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public UserResponseDTO updateLastName(Long id, String lastName) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -136,8 +148,18 @@ public class UserServiceImpl implements UserService {
         user.setLastName(lastName.trim());
         return toResponseDTO(userRepository.save(user));
     }
+    @Override
+    public UserResponseDTO updateDepartment(Long id, Long deptId) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new BadRequestException("User not found"));
+        Department dept = departmentRepository.findById(deptId)
+                .orElseThrow(() -> new BadRequestException("Department not found"));
+        user.setDepartment(dept);
+        return modelMapper.map(userRepository.save(user), UserResponseDTO.class);
+    }
 
     @Override
+    @Transactional
     public String updatePassword(Long userId, String oldPassword, String newPassword) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -151,6 +173,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public String updateStatus(Long id, Boolean isActive) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -167,6 +190,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public UserResponseDTO updateManager(Long userId, Long managerId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -183,6 +207,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public String resetPassword(Long id, String newPassword) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -193,6 +218,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public UserResponseDTO updateDesignation(Long id, String designation) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -202,6 +228,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public String deleteById(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -211,6 +238,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public String deleteByEmail(String email) {
         User user = userRepository.findByEmail(email.trim())
                 .orElseThrow(() -> new ResourceNotFoundException(

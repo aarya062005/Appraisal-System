@@ -2,21 +2,53 @@ package com.project.AppraisalSystem.controller;
 
 import com.project.AppraisalSystem.dto.UserRequestDTO;
 import com.project.AppraisalSystem.dto.UserResponseDTO;
+import com.project.AppraisalSystem.entity.User;
+import com.project.AppraisalSystem.exception.BadRequestException;
+import com.project.AppraisalSystem.repository.UserRepository;
 import com.project.AppraisalSystem.service.UserService;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
-
+import java.util.Map;
+@CrossOrigin(origins = "http://localhost:5173")
 @RestController
-@RequestMapping("/users")
+@RequestMapping("/api/users")
 @AllArgsConstructor
 public class UserController {
 
     private final UserService userService;
+    private final UserRepository userRepository;
+
+    //  LOGIN ENDPOINT
+    @PostMapping("/login")
+    public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> request) {
+        String email = request.get("email");
+        String password = request.get("password");
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new BadRequestException("Invalid email or password"));
+
+        if (!user.getPassword().equals(password)) {
+            throw new BadRequestException("Invalid email or password");
+        }
+
+        if (!user.getIsActive()) {
+            throw new BadRequestException("Account is inactive");
+        }
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("userId", user.getUserId());
+        response.put("firstName", user.getFirstName());
+        response.put("lastName", user.getLastName());
+        response.put("email", user.getEmail());
+        response.put("role", user.getRole().name());
+
+        return ResponseEntity.ok(response);
+    }
 
     @GetMapping
     public ResponseEntity<List<UserResponseDTO>> findAllUsers() {
@@ -90,6 +122,11 @@ public class UserController {
     public ResponseEntity<String> updateStatus(@PathVariable Long id,
                                                @RequestParam Boolean isActive) {
         return ResponseEntity.ok(userService.updateStatus(id, isActive));
+    }
+    @PatchMapping("/{id}/department")
+    public ResponseEntity<UserResponseDTO> updateDepartment(@PathVariable Long id,
+                                                            @RequestParam Long deptId) {
+        return ResponseEntity.ok(userService.updateDepartment(id, deptId));
     }
 
     @DeleteMapping("/{id}")

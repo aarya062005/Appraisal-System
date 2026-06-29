@@ -1,7 +1,5 @@
 package com.project.AppraisalSystem.dto;
 
-
-
 import com.project.AppraisalSystem.entity.enums.AppraisalStatus;
 import com.project.AppraisalSystem.entity.enums.CycleStatus;
 import lombok.AllArgsConstructor;
@@ -25,4 +23,6 @@ public class AppraisalsByManagerDTO {
     private String employeeEmail;
     private AppraisalStatus appraisalStatus;
     private LocalDateTime createdAt;
+    private Integer selfRating;      // ← added
+    private Integer managerRating;   // ← added
 }

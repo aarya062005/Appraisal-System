@@ -1,25 +1,27 @@
 package com.project.AppraisalSystem.controller;
 
-import com.project.AppraisalSystem.dto.CycleAppraisalDetailDTO;
+import com.project.AppraisalSystem.dto.CycleDetailDTO;
 import com.project.AppraisalSystem.dto.CycleReportDTO;
 import com.project.AppraisalSystem.service.ReportService;
-import lombok.RequiredArgsConstructor;
+import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/reports")
-@RequiredArgsConstructor
-@CrossOrigin(origins = "http://localhost:5173")
+@AllArgsConstructor
 public class ReportController {
 
     private final ReportService reportService;
 
     @GetMapping("/cycles")
-    public ResponseEntity<List<String>> getAllCycles() {
-        return ResponseEntity.ok(reportService.getAllCycles());
+    public ResponseEntity<List<String>> findAllCycleNames() {
+        return ResponseEntity.ok(reportService.findAllCycleNames());
     }
 
     @GetMapping("/cycle/{cycleName}")
@@ -28,7 +30,7 @@ public class ReportController {
     }
 
     @GetMapping("/cycle/{cycleName}/details")
-    public ResponseEntity<List<CycleAppraisalDetailDTO>> getCycleDetails(@PathVariable String cycleName) {
-        return ResponseEntity.ok(reportService.getCycleAppraisalDetails(cycleName));
+    public ResponseEntity<List<CycleDetailDTO>> getCycleDetails(@PathVariable String cycleName) {
+        return ResponseEntity.ok(reportService.getCycleDetails(cycleName));
     }
 }

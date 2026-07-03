@@ -1,4 +1,3 @@
-
 package com.project.AppraisalSystem.controller;
 import com.project.AppraisalSystem.dto.*;
 import com.project.AppraisalSystem.entity.enums.AppraisalStatus;
@@ -27,6 +26,11 @@ public class AppraisalsController {
         return ResponseEntity.ok(appraisalsService.findAppraisalById(appraisalId));
     }
 
+    @GetMapping("/{appraisalId}/employee-view")
+    public ResponseEntity<EmployeeAppraisalResponseDTO> findEmployeeViewById(@PathVariable Long appraisalId) {
+        return ResponseEntity.ok(appraisalsService.findEmployeeViewById(appraisalId));
+    }
+
     @GetMapping("/cycle/{cycleName}")
     public ResponseEntity<List<AppraisalsSummaryDTO>> findAppraisalsByCycle(
             @PathVariable String cycleName) {
@@ -44,12 +48,6 @@ public class AppraisalsController {
             @PathVariable CycleStatus cycleStatus) {
         return ResponseEntity.ok(appraisalsService.findAppraisalsByCycleStatus(cycleStatus));
     }
-    @GetMapping("/{appraisalId}/employee-view")
-    public ResponseEntity<EmployeeAppraisalResponseDTO> findAppraisalByIdForEmployee(
-            @PathVariable Long appraisalId) {
-        return ResponseEntity.ok(appraisalsService.findAppraisalByIdForEmployee(appraisalId));
-    }
-
 
     @PostMapping
     public ResponseEntity<AppraisalsSummaryDTO> createAppraisal(

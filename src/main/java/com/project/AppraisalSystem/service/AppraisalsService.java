@@ -12,6 +12,7 @@ public interface AppraisalsService {
 
     List<AppraisalsSummaryDTO> findAllAppraisals();
     AppraisalsSummaryDTO findAppraisalById(Long appraisalId);
+    EmployeeAppraisalResponseDTO findEmployeeViewById(Long appraisalId);
     List<AppraisalsByEmployeeDTO> findAppraisalsByEmployee_Id(Long employeeId);
     List<AppraisalsByEmployeeDTO> findAppraisalsByEmployeeEmail(String email);
     List<AppraisalsByManagerDTO> findAppraisalsByManager_Id(Long managerId);
@@ -42,6 +43,4 @@ public interface AppraisalsService {
     EmployeeAppraisalResponseDTO acknowledgeAppraisal(Long appraisalId);
     // -------------------------------------------DELETE-------------------------------------------
     String deleteAppraisal(Long appraisalId);
-
-    EmployeeAppraisalResponseDTO    findAppraisalByIdForEmployee(Long appraisalId);
-};
+}

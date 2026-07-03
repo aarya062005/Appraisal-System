@@ -1,75 +1,84 @@
 package com.project.AppraisalSystem.service.implementation;
 
-import com.project.AppraisalSystem.dto.CycleAppraisalDetailDTO;
+import com.project.AppraisalSystem.dto.CycleDetailDTO;
 import com.project.AppraisalSystem.dto.CycleReportDTO;
 import com.project.AppraisalSystem.entity.Appraisals;
 import com.project.AppraisalSystem.entity.enums.AppraisalStatus;
+import com.project.AppraisalSystem.exception.ResourceNotFoundException;
 import com.project.AppraisalSystem.repository.AppraisalsRepository;
 import com.project.AppraisalSystem.service.ReportService;
-import lombok.RequiredArgsConstructor;
+import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
+@AllArgsConstructor
 public class ReportServiceImpl implements ReportService {
 
     private final AppraisalsRepository appraisalsRepository;
 
     @Override
-    @Transactional(readOnly = true)
-    public List<String> getAllCycles() {
+    public List<String> findAllCycleNames() {
         return appraisalsRepository.findAll()
                 .stream()
                 .map(Appraisals::getCycleName)
                 .distinct()
-                .sorted()
+                .sorted(Comparator.reverseOrder())
                 .collect(Collectors.toList());
     }
 
+    private List<Appraisals> getCycleOrThrow(String cycleName) {
+        List<Appraisals> appraisals = appraisalsRepository.findAllByCycleName(cycleName);
+        if (appraisals.isEmpty()) {
+            throw new ResourceNotFoundException("No appraisals found for cycle: " + cycleName);
+        }
+        return appraisals;
+    }
+
     @Override
-    @Transactional(readOnly = true)
     public CycleReportDTO getCycleReport(String cycleName) {
-        List<Appraisals> appraisals = appraisalsRepository.findAll()
-                .stream()
-                .filter(a -> a.getCycleName().equals(cycleName))
-                .collect(Collectors.toList());
+        List<Appraisals> appraisals = getCycleOrThrow(cycleName);
 
         int total = appraisals.size();
-        int acknowledged = (int) appraisals.stream()
+        long acknowledged = appraisals.stream()
                 .filter(a -> a.getAppraisalStatus() == AppraisalStatus.ACKNOWLEDGED)
                 .count();
-        int completion = total > 0 ? (acknowledged * 100) / total : 0;
-        int pendingAction = total - acknowledged;
+        long pendingAction = total - acknowledged;
+        int completion = total == 0 ? 0 : (int) Math.round((acknowledged * 100.0) / total);
 
-        Double avgSelfRating = appraisals.stream()
-                .filter(a -> a.getSelfRating() != null && a.getSelfRating() > 0)
-                .mapToInt(Appraisals::getSelfRating)
+        double avgSelfRating = appraisals.stream()
+                .map(Appraisals::getSelfRating)
+                .filter(r -> r != null && r > 0)
+                .mapToInt(Integer::intValue)
                 .average()
                 .orElse(0.0);
 
-        Double avgManagerRating = appraisals.stream()
-                .filter(a -> a.getManagerRating() != null && a.getManagerRating() > 0)
-                .mapToInt(Appraisals::getManagerRating)
+        double avgManagerRating = appraisals.stream()
+                .map(Appraisals::getManagerRating)
+                .filter(r -> r != null && r > 0)
+                .mapToInt(Integer::intValue)
                 .average()
                 .orElse(0.0);
 
-        Map<String, Long> statusBreakdown = appraisals.stream()
-                .collect(Collectors.groupingBy(
-                        a -> a.getAppraisalStatus().name(),
-                        Collectors.counting()
-                ));
+        Map<AppraisalStatus, Long> grouped = appraisals.stream()
+                .collect(Collectors.groupingBy(Appraisals::getAppraisalStatus, Collectors.counting()));
+
+        Map<String, Integer> statusBreakdown = new LinkedHashMap<>();
+        for (AppraisalStatus status : AppraisalStatus.values()) {
+            statusBreakdown.put(status.name(), grouped.getOrDefault(status, 0L).intValue());
+        }
 
         return CycleReportDTO.builder()
                 .cycleName(cycleName)
                 .totalAppraisals(total)
-                .acknowledged(acknowledged)
+                .acknowledged((int) acknowledged)
                 .completion(completion)
-                .pendingAction(pendingAction)
+                .pendingAction((int) pendingAction)
                 .avgSelfRating(avgSelfRating)
                 .avgManagerRating(avgManagerRating)
                 .statusBreakdown(statusBreakdown)
@@ -77,20 +86,24 @@ public class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public List<CycleAppraisalDetailDTO> getCycleAppraisalDetails(String cycleName) {
-        return appraisalsRepository.findAll()
-                .stream()
-                .filter(a -> a.getCycleName().equals(cycleName))
-                .map(a -> CycleAppraisalDetailDTO.builder()
+    public List<CycleDetailDTO> getCycleDetails(String cycleName) {
+        List<Appraisals> appraisals = getCycleOrThrow(cycleName);
+
+        return appraisals.stream()
+                .map(a -> CycleDetailDTO.builder()
                         .appraisalId(a.getAppraisalId())
-                        .employeeEmail(a.getEmployee().getEmail())
-                        .managerEmail(a.getManager().getEmail())
-                        .deptName(a.getEmployee().getDepartment() != null
-                                ? a.getEmployee().getDepartment().getDeptName() : "—")
+                        .employeeEmail(a.getEmployee() != null
+                                ? a.getEmployee().getFirstName() + " " + a.getEmployee().getLastName()
+                                : "—")
+                        .managerEmail(a.getManager() != null
+                                ? a.getManager().getFirstName() + " " + a.getManager().getLastName()
+                                : "—")
+                        .deptName(a.getEmployee() != null && a.getEmployee().getDepartment() != null
+                                ? a.getEmployee().getDepartment().getDeptName()
+                                : "Unassigned")
                         .appraisalStatus(a.getAppraisalStatus())
-                        .selfRating(a.getSelfRating())
-                        .managerRating(a.getManagerRating())
+                        .selfRating(a.getSelfRating() != null ? a.getSelfRating() : 0)
+                        .managerRating(a.getManagerRating() != null ? a.getManagerRating() : 0)
                         .build())
                 .collect(Collectors.toList());
     }

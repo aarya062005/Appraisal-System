@@ -13,11 +13,11 @@ import java.util.Map;
 @Builder
 public class CycleReportDTO {
     private String cycleName;
-    private int totalAppraisals;
-    private int acknowledged;
-    private int completion;
-    private int pendingAction;
+    private Integer totalAppraisals;
+    private Integer acknowledged;
+    private Integer completion;
+    private Integer pendingAction;
     private Double avgSelfRating;
     private Double avgManagerRating;
-    private Map<String, Long> statusBreakdown;
+    private Map<String, Integer> statusBreakdown;
 }

@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class CycleAppraisalDetailDTO {
+public class CycleDetailDTO {
     private Long appraisalId;
     private String employeeEmail;
     private String managerEmail;

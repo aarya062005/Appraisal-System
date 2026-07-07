@@ -1,9 +1,11 @@
 package com.project.AppraisalSystem.service;
 
+import com.project.AppraisalSystem.dto.BulkUploadResultDTO;
 import com.project.AppraisalSystem.dto.LoginRequestDTO;
 import com.project.AppraisalSystem.dto.LoginResponseDTO;
 import com.project.AppraisalSystem.dto.UserRequestDTO;
 import com.project.AppraisalSystem.dto.UserResponseDTO;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -21,6 +23,7 @@ public interface UserService {
 
  // CREATE
  UserResponseDTO createUser(UserRequestDTO dto);
+ BulkUploadResultDTO bulkUploadUsers(MultipartFile file);
 
  // UPDATE
  UserResponseDTO updateFirstName(Long id, String firstName);

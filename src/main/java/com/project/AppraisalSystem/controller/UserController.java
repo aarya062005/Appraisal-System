@@ -1,5 +1,6 @@
 package com.project.AppraisalSystem.controller;
 
+import com.project.AppraisalSystem.dto.BulkUploadResultDTO;
 import com.project.AppraisalSystem.dto.LoginRequestDTO;
 import com.project.AppraisalSystem.dto.LoginResponseDTO;
 import com.project.AppraisalSystem.dto.UserRequestDTO;
@@ -9,6 +10,7 @@ import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -53,6 +55,11 @@ public class UserController {
     public ResponseEntity<UserResponseDTO> createUser(@RequestBody UserRequestDTO dto) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(userService.createUser(dto));
+    }
+
+    @PostMapping("/bulk-upload")
+    public ResponseEntity<BulkUploadResultDTO> bulkUploadUsers(@RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(userService.bulkUploadUsers(file));
     }
 
     @PatchMapping("/{id}/firstname")

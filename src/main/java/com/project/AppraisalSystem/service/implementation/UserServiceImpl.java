@@ -1,5 +1,6 @@
 package com.project.AppraisalSystem.service.implementation;
 
+import com.project.AppraisalSystem.dto.BulkUploadResultDTO;
 import com.project.AppraisalSystem.dto.LoginRequestDTO;
 import com.project.AppraisalSystem.dto.LoginResponseDTO;
 import com.project.AppraisalSystem.dto.UserRequestDTO;
@@ -13,12 +14,21 @@ import com.project.AppraisalSystem.exception.ResourceNotFoundException;
 import com.project.AppraisalSystem.repository.DepartmentRepository;
 import com.project.AppraisalSystem.repository.UserRepository;
 import com.project.AppraisalSystem.security.JwtUtil;
+import com.project.AppraisalSystem.service.EmailService;
 import com.project.AppraisalSystem.service.UserService;
 import lombok.AllArgsConstructor;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.modelmapper.ModelMapper;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -31,6 +41,7 @@ public class UserServiceImpl implements UserService {
     private final ModelMapper modelMapper;
     private final JwtUtil jwtUtil;
     private final BCryptPasswordEncoder passwordEncoder; // ← BCrypt
+    private final EmailService emailService;
 
     // ── DTO mapper ────────────────────────────────────────────────────────
     private UserResponseDTO toResponseDTO(User user) {
@@ -162,6 +173,137 @@ public class UserServiceImpl implements UserService {
         }
         user.setIsActive(true);
         return toResponseDTO(userRepository.save(user));
+    }
+
+    // ── BULK UPLOAD ───────────────────────────────────────────────────────
+    @Override
+    public BulkUploadResultDTO bulkUploadUsers(MultipartFile file) {
+        int successCount = 0;
+        List<BulkUploadResultDTO.RowError> errors = new ArrayList<>();
+
+        List<User> allUsers = userRepository.findAll();
+        List<Department> allDepartments = departmentRepository.findAll();
+
+        try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
+            Sheet sheet = workbook.getSheetAt(0);
+
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row == null) continue;
+
+                int rowNumber = i + 1;
+                String email = getCellString(row, 2);
+
+                try {
+                    String firstName = getCellString(row, 0);
+                    String lastName = getCellString(row, 1);
+                    String phone = getCellString(row, 3);
+                    String roleStr = getCellString(row, 4).toUpperCase();
+                    String designation = getCellString(row, 5);
+                    String deptName = getCellString(row, 6);
+                    String managerName = getCellString(row, 7);
+
+                    if (firstName.isBlank() || lastName.isBlank()
+                            || email.isBlank() || roleStr.isBlank()) {
+                        throw new BadRequestException("Missing required field(s)");
+                    }
+
+                    boolean emailExists = allUsers.stream()
+                            .anyMatch(u -> u.getEmail().equalsIgnoreCase(email));
+                    if (emailExists) {
+                        throw new BadRequestException("Duplicate email");
+                    }
+
+                    Roles role;
+                    try {
+                        role = Roles.valueOf(roleStr);
+                    } catch (IllegalArgumentException ex) {
+                        throw new BadRequestException("Invalid role: " + roleStr);
+                    }
+
+                    Department department = null;
+                    if (!deptName.isBlank()) {
+                        department = allDepartments.stream()
+                                .filter(d -> d.getDeptName().equalsIgnoreCase(deptName))
+                                .findFirst()
+                                .orElseThrow(() -> new BadRequestException(
+                                        "Department not found: " + deptName));
+                    }
+
+                    User manager = null;
+                    if (!managerName.isBlank()) {
+                        List<User> matches = allUsers.stream()
+                                .filter(u -> (u.getFirstName() + " " + u.getLastName())
+                                        .equalsIgnoreCase(managerName.trim()))
+                                .toList();
+                        if (matches.isEmpty()) {
+                            throw new BadRequestException("Manager not found: " + managerName);
+                        }
+                        if (matches.size() > 1) {
+                            throw new BadRequestException(
+                                    "Multiple managers named: " + managerName + " — use a unique name");
+                        }
+                        manager = matches.get(0);
+                    }
+
+                    String tempPassword = generateTempPassword();
+
+                    User newUser = new User();
+                    newUser.setFirstName(firstName);
+                    newUser.setLastName(lastName);
+                    newUser.setEmail(email);
+                    newUser.setPhone(phone);
+                    newUser.setDesignation(designation);
+                    newUser.setRole(role);
+                    newUser.setPassword(passwordEncoder.encode(tempPassword));
+                    newUser.setIsActive(true);
+                    newUser.setDepartment(department);
+                    newUser.setManager(manager);
+
+                    User saved = userRepository.save(newUser);
+                    allUsers.add(saved); // so later rows in the same file can reference this as a manager
+
+                    emailService.sendWelcomeEmail(email, firstName, tempPassword);
+
+                    successCount++;
+
+                } catch (Exception e) {
+                    errors.add(BulkUploadResultDTO.RowError.builder()
+                            .rowNumber(rowNumber)
+                            .email(email)
+                            .reason(e.getMessage())
+                            .build());
+                }
+            }
+        } catch (Exception e) {
+            throw new BadRequestException("Could not read Excel file: " + e.getMessage());
+        }
+
+        return BulkUploadResultDTO.builder()
+                .successCount(successCount)
+                .failureCount(errors.size())
+                .errors(errors)
+                .build();
+    }
+
+    private String getCellString(Row row, int index) {
+        Cell cell = row.getCell(index);
+        if (cell == null) return "";
+        return switch (cell.getCellType()) {
+            case STRING -> cell.getStringCellValue().trim();
+            case NUMERIC -> String.valueOf((long) cell.getNumericCellValue());
+            default -> "";
+        };
+    }
+
+    private String generateTempPassword() {
+        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+        SecureRandom random = new SecureRandom();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 10; i++) {
+            sb.append(chars.charAt(random.nextInt(chars.length())));
+        }
+        return sb.toString();
     }
 
     // ── UPDATE ────────────────────────────────────────────────────────────

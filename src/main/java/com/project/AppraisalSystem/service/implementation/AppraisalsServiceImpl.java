@@ -5,14 +5,15 @@ import com.project.AppraisalSystem.entity.Appraisals;
 import com.project.AppraisalSystem.entity.User;
 import com.project.AppraisalSystem.entity.enums.AppraisalStatus;
 import com.project.AppraisalSystem.entity.enums.CycleStatus;
+import com.project.AppraisalSystem.entity.enums.NotificationType;
 import com.project.AppraisalSystem.entity.enums.Roles;
 import com.project.AppraisalSystem.exception.BadRequestException;
 import com.project.AppraisalSystem.exception.DuplicateResourceException;
 import com.project.AppraisalSystem.exception.ResourceNotFoundException;
 import com.project.AppraisalSystem.repository.AppraisalsRepository;
-import com.project.AppraisalSystem.repository.DepartmentRepository;
 import com.project.AppraisalSystem.repository.UserRepository;
 import com.project.AppraisalSystem.service.AppraisalsService;
+import com.project.AppraisalSystem.service.NotificationHelper;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.AllArgsConstructor;
 import org.modelmapper.ModelMapper;
@@ -25,16 +26,15 @@ import java.util.stream.Collectors;
 @Service
 @AllArgsConstructor
 public class AppraisalsServiceImpl implements AppraisalsService {
+
     private final UserRepository userRepository;
     private final ModelMapper modelMapper;
     private final AppraisalsRepository appraisalsRepository;
+    private final NotificationHelper notificationHelper;
 
     //--------------------------------MAPPER FOR SUMMARY----------------------------------------------
     private AppraisalsSummaryDTO toSummaryDTO(Appraisals appraisal) {
         AppraisalsSummaryDTO dto = modelMapper.map(appraisal, AppraisalsSummaryDTO.class);
-        // NOTE: despite the field names, the frontend renders employeeEmail/managerEmail
-        // directly as display names (avatar initials, table cells, grouping keys), so we
-        // populate them with "First Last" rather than the raw email address.
         if (appraisal.getEmployee() != null) {
             dto.setEmployeeEmail(appraisal.getEmployee().getFirstName()
                     + " " + appraisal.getEmployee().getLastName());
@@ -45,6 +45,7 @@ public class AppraisalsServiceImpl implements AppraisalsService {
         }
         return dto;
     }
+
     //-----------------------------------MAPPER FOR EMPLOYEE SEARCHING--------------------------------------
     private AppraisalsByEmployeeDTO toEmployeeDTO(Appraisals appraisal) {
         AppraisalsByEmployeeDTO dto = modelMapper.map(appraisal, AppraisalsByEmployeeDTO.class);
@@ -62,6 +63,7 @@ public class AppraisalsServiceImpl implements AppraisalsService {
         }
         return dto;
     }
+
     // ------------------------------------EMPLOYEE RESPONSE--------------------------------------------
     private EmployeeAppraisalResponseDTO toEmployeeResponseDTO(Appraisals appraisal) {
         EmployeeAppraisalResponseDTO dto = modelMapper.map(appraisal, EmployeeAppraisalResponseDTO.class);
@@ -98,6 +100,7 @@ public class AppraisalsServiceImpl implements AppraisalsService {
         }
         return dto;
     }
+
     //--------------------------GET ALL APPRAISAL-------------------------------------------
     @Override
     @Transactional(readOnly = true)
@@ -113,7 +116,8 @@ public class AppraisalsServiceImpl implements AppraisalsService {
     @Transactional(readOnly = true)
     public AppraisalsSummaryDTO findAppraisalById(Long appraisalId) {
         Appraisals appraisal = appraisalsRepository.findById(appraisalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Appraisal not found with id: " + appraisalId));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Appraisal not found with id: " + appraisalId));
         return toSummaryDTO(appraisal);
     }
 
@@ -122,7 +126,8 @@ public class AppraisalsServiceImpl implements AppraisalsService {
     @Transactional(readOnly = true)
     public EmployeeAppraisalResponseDTO findEmployeeViewById(Long appraisalId) {
         Appraisals appraisal = appraisalsRepository.findById(appraisalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Appraisal not found with id: " + appraisalId));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Appraisal not found with id: " + appraisalId));
         return toEmployeeResponseDTO(appraisal);
     }
 
@@ -221,8 +226,7 @@ public class AppraisalsServiceImpl implements AppraisalsService {
         }
 
         if (!dto.getCycleStartDate().isBefore(dto.getCycleEndDate())) {
-            throw new BadRequestException(
-                    "Cycle start date must be before end date");
+            throw new BadRequestException("Cycle start date must be before end date");
         }
 
         Appraisals appraisal = Appraisals.builder()
@@ -233,7 +237,21 @@ public class AppraisalsServiceImpl implements AppraisalsService {
                 .manager(manager)
                 .build();
 
-        return toSummaryDTO(appraisalsRepository.save(appraisal));
+        AppraisalsSummaryDTO saved = toSummaryDTO(appraisalsRepository.save(appraisal));
+
+        // ── Notify employee ──
+        notificationHelper.send(employee, NotificationType.CYCLE_STARTED,
+                "Appraisal Cycle Started",
+                "Your appraisal for cycle '" + dto.getCycleName()
+                        + "' has been created. Please complete your self-assessment.");
+
+        // ── Notify manager ──
+        notificationHelper.send(manager, NotificationType.CYCLE_STARTED,
+                "New Appraisal Assigned",
+                "An appraisal for " + employee.getFirstName() + " " + employee.getLastName()
+                        + " has been created for cycle '" + dto.getCycleName() + "'.");
+
+        return saved;
     }
 
     //-----------------------------------SAVING SELF ASSESSMENT DRAFT-------------------------------------------
@@ -285,7 +303,7 @@ public class AppraisalsServiceImpl implements AppraisalsService {
         return toEmployeeResponseDTO(appraisalsRepository.save(appraisal));
     }
 
-    // ------------------------SUBMIT SELF ASSESSMENT  --------------------------
+    // ------------------------SUBMIT SELF ASSESSMENT--------------------------
     @Override
     public EmployeeAppraisalResponseDTO submitSelfAssessment(Long appraisalId, SelfAssessmentDTO dto) {
 
@@ -299,21 +317,16 @@ public class AppraisalsServiceImpl implements AppraisalsService {
                     "Cannot submit appraisal in status: " + appraisal.getAppraisalStatus());
         }
 
-        if (dto.getWhatWentWell() == null || dto.getWhatWentWell().isBlank()) {
+        if (dto.getWhatWentWell() == null || dto.getWhatWentWell().isBlank())
             throw new BadRequestException("What went well cannot be empty");
-        }
-        if (dto.getWhatToImprove() == null || dto.getWhatToImprove().isBlank()) {
+        if (dto.getWhatToImprove() == null || dto.getWhatToImprove().isBlank())
             throw new BadRequestException("What to improve cannot be empty");
-        }
-        if (dto.getAchievements() == null || dto.getAchievements().isBlank()) {
+        if (dto.getAchievements() == null || dto.getAchievements().isBlank())
             throw new BadRequestException("Achievements cannot be empty");
-        }
-        if (dto.getSelfRating() == null) {
+        if (dto.getSelfRating() == null)
             throw new BadRequestException("Self rating cannot be empty");
-        }
-        if (dto.getSelfRating() < 1 || dto.getSelfRating() > 5) {
+        if (dto.getSelfRating() < 1 || dto.getSelfRating() > 5)
             throw new BadRequestException("Self rating must be between 1 and 5");
-        }
 
         appraisal.setWhatWentWell(dto.getWhatWentWell());
         appraisal.setWhatToImprove(dto.getWhatToImprove());
@@ -322,8 +335,24 @@ public class AppraisalsServiceImpl implements AppraisalsService {
         appraisal.setAppraisalStatus(AppraisalStatus.SELF_SUBMITTED);
         appraisal.setSubmittedAt(LocalDateTime.now());
 
-        return toEmployeeResponseDTO(appraisalsRepository.save(appraisal));
+        Appraisals saved = appraisalsRepository.save(appraisal);
+
+        // ── Notify manager ──
+        notificationHelper.send(saved.getManager(), NotificationType.SELF_ASSESSMENT_SUBMITTED,
+                "Self Assessment Submitted",
+                saved.getEmployee().getFirstName() + " " + saved.getEmployee().getLastName()
+                        + " has submitted their self-assessment for cycle '"
+                        + saved.getCycleName() + "'. Please review.");
+
+        // ── Notify HR ──
+        notificationHelper.sendToAllHR(NotificationType.SELF_ASSESSMENT_SUBMITTED,
+                "Self Assessment Submitted",
+                saved.getEmployee().getFirstName() + " " + saved.getEmployee().getLastName()
+                        + " submitted self-assessment for cycle '" + saved.getCycleName() + "'.");
+
+        return toEmployeeResponseDTO(saved);
     }
+
     // ------------------------SUBMIT SELF ASSESSMENT THROUGH EMAIL--------------------------
     @Override
     public EmployeeAppraisalResponseDTO submitSelfAssessmentByEmployeeEmail(
@@ -341,21 +370,16 @@ public class AppraisalsServiceImpl implements AppraisalsService {
                     "Cannot submit appraisal in status: " + appraisal.getAppraisalStatus());
         }
 
-        if (dto.getWhatWentWell() == null || dto.getWhatWentWell().isBlank()) {
+        if (dto.getWhatWentWell() == null || dto.getWhatWentWell().isBlank())
             throw new BadRequestException("What went well cannot be empty");
-        }
-        if (dto.getWhatToImprove() == null || dto.getWhatToImprove().isBlank()) {
+        if (dto.getWhatToImprove() == null || dto.getWhatToImprove().isBlank())
             throw new BadRequestException("What to improve cannot be empty");
-        }
-        if (dto.getAchievements() == null || dto.getAchievements().isBlank()) {
+        if (dto.getAchievements() == null || dto.getAchievements().isBlank())
             throw new BadRequestException("Achievements cannot be empty");
-        }
-        if (dto.getSelfRating() == null) {
+        if (dto.getSelfRating() == null)
             throw new BadRequestException("Self rating cannot be empty");
-        }
-        if (dto.getSelfRating() < 1 || dto.getSelfRating() > 5) {
+        if (dto.getSelfRating() < 1 || dto.getSelfRating() > 5)
             throw new BadRequestException("Self rating must be between 1 and 5");
-        }
 
         appraisal.setWhatWentWell(dto.getWhatWentWell());
         appraisal.setWhatToImprove(dto.getWhatToImprove());
@@ -364,8 +388,24 @@ public class AppraisalsServiceImpl implements AppraisalsService {
         appraisal.setAppraisalStatus(AppraisalStatus.SELF_SUBMITTED);
         appraisal.setSubmittedAt(LocalDateTime.now());
 
-        return toEmployeeResponseDTO(appraisalsRepository.save(appraisal));
+        Appraisals saved = appraisalsRepository.save(appraisal);
+
+        // ── Notify manager ──
+        notificationHelper.send(saved.getManager(), NotificationType.SELF_ASSESSMENT_SUBMITTED,
+                "Self Assessment Submitted",
+                saved.getEmployee().getFirstName() + " " + saved.getEmployee().getLastName()
+                        + " submitted their self-assessment for cycle '"
+                        + saved.getCycleName() + "'.");
+
+        // ── Notify HR ──
+        notificationHelper.sendToAllHR(NotificationType.SELF_ASSESSMENT_SUBMITTED,
+                "Self Assessment Submitted",
+                saved.getEmployee().getFirstName() + " " + saved.getEmployee().getLastName()
+                        + " submitted self-assessment for cycle '" + saved.getCycleName() + "'.");
+
+        return toEmployeeResponseDTO(saved);
     }
+
     @Override
     public ManagerAppraisalResponseDTO saveManagerReviewDraft(Long appraisalId, ManagerReviewDTO dto) {
 
@@ -426,18 +466,14 @@ public class AppraisalsServiceImpl implements AppraisalsService {
                     "Cannot submit appraisal in status: " + appraisal.getAppraisalStatus());
         }
 
-        if (dto.getManagerStrengths() == null || dto.getManagerStrengths().isBlank()) {
+        if (dto.getManagerStrengths() == null || dto.getManagerStrengths().isBlank())
             throw new BadRequestException("Manager strengths cannot be empty");
-        }
-        if (dto.getManagerImprove() == null || dto.getManagerImprove().isBlank()) {
+        if (dto.getManagerImprove() == null || dto.getManagerImprove().isBlank())
             throw new BadRequestException("Manager improvements cannot be empty");
-        }
-        if (dto.getManagerRating() == null) {
+        if (dto.getManagerRating() == null)
             throw new BadRequestException("Manager rating cannot be empty");
-        }
-        if (dto.getManagerRating() < 1 || dto.getManagerRating() > 5) {
+        if (dto.getManagerRating() < 1 || dto.getManagerRating() > 5)
             throw new BadRequestException("Manager rating must be between 1 and 5");
-        }
 
         appraisal.setManagerStrengths(dto.getManagerStrengths());
         appraisal.setManagerImprove(dto.getManagerImprove());
@@ -445,7 +481,17 @@ public class AppraisalsServiceImpl implements AppraisalsService {
         appraisal.setManagerRating(dto.getManagerRating());
         appraisal.setAppraisalStatus(AppraisalStatus.MANAGER_REVIEWED);
 
-        return toManagerResponseDTO(appraisalsRepository.save(appraisal));
+        Appraisals saved = appraisalsRepository.save(appraisal);
+
+        // ── Notify all HR that approval is needed ──
+        notificationHelper.sendToAllHR(NotificationType.MANAGER_REVIEW_DONE,
+                "Manager Review Completed — Approval Needed",
+                saved.getManager().getFirstName() + " " + saved.getManager().getLastName()
+                        + " has reviewed " + saved.getEmployee().getFirstName() + " "
+                        + saved.getEmployee().getLastName()
+                        + "'s appraisal for cycle '" + saved.getCycleName() + "'. Please approve.");
+
+        return toManagerResponseDTO(saved);
     }
 
     @Override
@@ -464,18 +510,14 @@ public class AppraisalsServiceImpl implements AppraisalsService {
                     "Cannot submit appraisal in status: " + appraisal.getAppraisalStatus());
         }
 
-        if (dto.getManagerStrengths() == null || dto.getManagerStrengths().isBlank()) {
+        if (dto.getManagerStrengths() == null || dto.getManagerStrengths().isBlank())
             throw new BadRequestException("Manager strengths cannot be empty");
-        }
-        if (dto.getManagerImprove() == null || dto.getManagerImprove().isBlank()) {
+        if (dto.getManagerImprove() == null || dto.getManagerImprove().isBlank())
             throw new BadRequestException("Manager improvements cannot be empty");
-        }
-        if (dto.getManagerRating() == null) {
+        if (dto.getManagerRating() == null)
             throw new BadRequestException("Manager rating cannot be empty");
-        }
-        if (dto.getManagerRating() < 1 || dto.getManagerRating() > 5) {
+        if (dto.getManagerRating() < 1 || dto.getManagerRating() > 5)
             throw new BadRequestException("Manager rating must be between 1 and 5");
-        }
 
         appraisal.setManagerStrengths(dto.getManagerStrengths());
         appraisal.setManagerImprove(dto.getManagerImprove());
@@ -483,8 +525,19 @@ public class AppraisalsServiceImpl implements AppraisalsService {
         appraisal.setManagerRating(dto.getManagerRating());
         appraisal.setAppraisalStatus(AppraisalStatus.MANAGER_REVIEWED);
 
-        return toManagerResponseDTO(appraisalsRepository.save(appraisal));
+        Appraisals saved = appraisalsRepository.save(appraisal);
+
+        // ── Notify all HR that approval is needed ──
+        notificationHelper.sendToAllHR(NotificationType.MANAGER_REVIEW_DONE,
+                "Manager Review Completed — Approval Needed",
+                saved.getManager().getFirstName() + " " + saved.getManager().getLastName()
+                        + " reviewed " + saved.getEmployee().getFirstName() + " "
+                        + saved.getEmployee().getLastName()
+                        + "'s appraisal for cycle '" + saved.getCycleName() + "'. Please approve.");
+
+        return toManagerResponseDTO(saved);
     }
+
     @Override
     public AppraisalsSummaryDTO approveAppraisal(Long appraisalId) {
 
@@ -500,8 +553,24 @@ public class AppraisalsServiceImpl implements AppraisalsService {
         appraisal.setAppraisalStatus(AppraisalStatus.APPROVED);
         appraisal.setApprovedAt(LocalDateTime.now());
 
-        return toSummaryDTO(appraisalsRepository.save(appraisal));
+        Appraisals saved = appraisalsRepository.save(appraisal);
+
+        // ── Notify employee ──
+        notificationHelper.send(saved.getEmployee(), NotificationType.APPRAISAL_APPROVED,
+                "Appraisal Approved",
+                "Your appraisal for cycle '" + saved.getCycleName()
+                        + "' has been approved by HR. Please acknowledge it.");
+
+        // ── Notify manager ──
+        notificationHelper.send(saved.getManager(), NotificationType.APPRAISAL_APPROVED,
+                "Appraisal Approved",
+                "The appraisal for " + saved.getEmployee().getFirstName() + " "
+                        + saved.getEmployee().getLastName()
+                        + " (cycle '" + saved.getCycleName() + "') has been approved by HR.");
+
+        return toSummaryDTO(saved);
     }
+
     @Override
     public EmployeeAppraisalResponseDTO acknowledgeAppraisal(Long appraisalId) {
 
@@ -516,7 +585,16 @@ public class AppraisalsServiceImpl implements AppraisalsService {
 
         appraisal.setAppraisalStatus(AppraisalStatus.ACKNOWLEDGED);
 
-        return toEmployeeResponseDTO(appraisalsRepository.save(appraisal));
+        Appraisals saved = appraisalsRepository.save(appraisal);
+
+        // ── Notify HR that cycle is complete ──
+        notificationHelper.sendToAllHR(NotificationType.GENERAL,
+                "Appraisal Acknowledged",
+                saved.getEmployee().getFirstName() + " " + saved.getEmployee().getLastName()
+                        + " has acknowledged their appraisal for cycle '"
+                        + saved.getCycleName() + "'.");
+
+        return toEmployeeResponseDTO(saved);
     }
 
     @Override
@@ -535,8 +613,4 @@ public class AppraisalsServiceImpl implements AppraisalsService {
         appraisalsRepository.delete(appraisal);
         return "Appraisal deleted successfully";
     }
-
-
-
-
 }

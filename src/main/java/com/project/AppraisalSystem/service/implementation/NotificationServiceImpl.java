@@ -9,6 +9,7 @@ import com.project.AppraisalSystem.entity.enums.NotificationType;
 import com.project.AppraisalSystem.exception.ResourceNotFoundException;
 import com.project.AppraisalSystem.repository.NotificationRepository;
 import com.project.AppraisalSystem.repository.UserRepository;
+import com.project.AppraisalSystem.service.EmailService;
 import com.project.AppraisalSystem.service.NotificationService;
 import lombok.AllArgsConstructor;
 import org.modelmapper.ModelMapper;
@@ -27,6 +28,7 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
     private final ModelMapper modelMapper;
+    private final EmailService emailService;
 
     private NotificationResponseDTO toResponseDTO(Notification notification) {
         NotificationResponseDTO dto = modelMapper.map(notification, NotificationResponseDTO.class);
@@ -131,7 +133,11 @@ public class NotificationServiceImpl implements NotificationService {
                 .message(dto.getMessage())
                 .isRead(false)
                 .build();
-        return toResponseDTO(notificationRepository.save(notification));
+        NotificationResponseDTO saved = toResponseDTO(notificationRepository.save(notification));
+
+        emailService.sendNotificationEmail(dto.getTitle(), dto.getMessage());
+
+        return saved;
     }
 
     @Override
